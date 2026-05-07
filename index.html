@@ -156,11 +156,19 @@
   </div>
 
   <div class="card" style="margin-bottom:14px;">
-    <div class="upload-zone" onclick="document.getElementById('csvInput').click()">
-      <div style="font-size:24px;margin-bottom:6px;">📊</div>
-      <div style="font-weight:600;">นำเข้า Bank Statement</div>
-      <div style="font-size:11px;margin-top:4px;">ไฟล์ .csv จากธนาคาร (วันที่, รายการ, จำนวน)</div>
-      <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="handleCSV(event)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div class="upload-zone" onclick="document.getElementById('pdfInput').click()" style="margin-bottom:0;">
+        <div style="font-size:24px;margin-bottom:6px;">📄</div>
+        <div style="font-weight:600;">KBank K+ PDF Statement</div>
+        <div style="font-size:11px;margin-top:4px;">ไฟล์ .pdf จากแอป K+ (ใส่รหัสวันเกิด)</div>
+        <input type="file" id="pdfInput" style="display:none" accept=".pdf" onchange="handlePDF(event)">
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('csvInput').click()" style="margin-bottom:0;">
+        <div style="font-size:24px;margin-bottom:6px;">📊</div>
+        <div style="font-weight:600;">นำเข้า Bank Statement CSV</div>
+        <div style="font-size:11px;margin-top:4px;">ไฟล์ .csv จากธนาคาร (วันที่, รายการ, จำนวน)</div>
+        <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="handleCSV(event)">
+      </div>
     </div>
     <div id="import-msg" style="font-size:12px;color:var(--muted);"></div>
   </div>
@@ -294,6 +302,29 @@
 </div>
 
 
+<!-- ===== MODAL: PDF KBANK ===== -->
+<div class="modal-bg" id="modal-pdf">
+  <div class="modal" style="max-width:500px;">
+    <h3>📄 นำเข้า KBank K+ PDF Statement</h3>
+    <div class="form-group" style="margin-bottom:6px;">
+      <label>รหัส PDF (วันเกิด 6 หลัก ปีพ.ศ.)</label>
+      <input type="text" id="pdf-password" maxlength="6" placeholder="เช่น 010165" pattern="\d{6}"
+             style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">
+      รูปแบบ DDMMYY — เช่น เกิด 1 ม.ค. 2565 = <strong style="color:var(--text);">010165</strong>
+    </div>
+    <div id="pdf-status" style="font-size:12px;color:var(--muted);min-height:18px;margin-bottom:10px;"></div>
+    <div id="pdf-preview" style="max-height:260px;overflow-y:auto;margin-bottom:10px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="pdf-import-btn" onclick="importKBankPDF()">นำเข้า</button>
+      <button class="btn btn-primary" id="pdf-confirm-btn" onclick="confirmKBankImport()" style="display:none;background:#34d399;border-color:#34d399;">บันทึกทั้งหมด</button>
+      <button class="btn" onclick="closeModal('modal-pdf')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 // ===== STATE =====
@@ -671,7 +702,143 @@ function renderOverview() {
     : '<tr><td colspan="4" style="color:var(--muted);padding:16px 0;">ยังไม่มีรายการ</td></tr>';
 }
 
+// ===== PDF KBANK K+ IMPORT =====
+let pendingPDFFile = null;
+let pendingKBankTxs = [];
+
+function handlePDF(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingPDFFile = file;
+  pendingKBankTxs = [];
+  document.getElementById('pdf-password').value = '';
+  document.getElementById('pdf-status').textContent = '';
+  document.getElementById('pdf-preview').innerHTML = '';
+  document.getElementById('pdf-confirm-btn').style.display = 'none';
+  document.getElementById('pdf-import-btn').style.display = '';
+  document.getElementById('modal-pdf').classList.add('open');
+  e.target.value = '';
+}
+
+async function importKBankPDF() {
+  const password = document.getElementById('pdf-password').value.trim();
+  if (!/^\d{6}$/.test(password)) {
+    document.getElementById('pdf-status').textContent = '⚠️ กรุณากรอกรหัส 6 หลัก เช่น 010165';
+    return;
+  }
+  const statusEl = document.getElementById('pdf-status');
+  const previewEl = document.getElementById('pdf-preview');
+  statusEl.textContent = '⏳ กำลังเปิด PDF...';
+  previewEl.innerHTML = '';
+  document.getElementById('pdf-import-btn').disabled = true;
+
+  try {
+    const arrayBuffer = await pendingPDFFile.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, password });
+    const pdf = await loadingTask.promise;
+    statusEl.textContent = `✓ เปิดได้ — กำลังอ่าน ${pdf.numPages} หน้า...`;
+
+    const transactions = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      // Group items by y-coordinate (row)
+      const rows = {};
+      content.items.forEach(item => {
+        const y = Math.round(item.transform[5] / 2) * 2; // bin to 2pt
+        if (!rows[y]) rows[y] = [];
+        rows[y].push({ x: item.transform[4], text: item.str });
+      });
+      Object.keys(rows)
+        .sort((a, b) => b - a) // top → bottom
+        .forEach(y => {
+          const rowText = rows[y].sort((a, b) => a.x - b.x).map(i => i.text).join(' ');
+          const tx = parseKBankRow(rowText);
+          if (tx) transactions.push(tx);
+        });
+    }
+
+    pendingKBankTxs = transactions;
+    if (!transactions.length) {
+      statusEl.textContent = '⚠️ ไม่พบรายการในไฟล์นี้ (อาจเป็นรูปแบบที่ไม่รองรับ)';
+    } else {
+      statusEl.textContent = `✓ พบ ${transactions.length} รายการ`;
+      previewEl.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr>
+            <th style="text-align:left;padding:4px 0;color:var(--muted);border-bottom:1px solid var(--border);">วันที่</th>
+            <th style="text-align:left;padding:4px 0;color:var(--muted);border-bottom:1px solid var(--border);">รายการ</th>
+            <th style="text-align:right;padding:4px 0;color:var(--muted);border-bottom:1px solid var(--border);">จำนวน</th>
+          </tr></thead>
+          <tbody>${transactions.map(t => `
+            <tr>
+              <td style="padding:4px 0;color:var(--muted);">${t.date}</td>
+              <td style="padding:4px 0;">${t.desc}</td>
+              <td style="padding:4px 0;text-align:right;font-weight:600;" class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}฿${t.amount.toLocaleString()}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+      document.getElementById('pdf-confirm-btn').style.display = '';
+      document.getElementById('pdf-import-btn').style.display = 'none';
+    }
+  } catch (err) {
+    if (err.name === 'PasswordException' || err.message?.includes('password')) {
+      statusEl.textContent = '❌ รหัสผ่านไม่ถูกต้อง — ลองใหม่อีกครั้ง';
+    } else {
+      statusEl.textContent = '❌ ' + (err.message || 'เกิดข้อผิดพลาด');
+    }
+  }
+  document.getElementById('pdf-import-btn').disabled = false;
+}
+
+function parseKBankRow(rowText) {
+  const dateMatch = rowText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!dateMatch) return null;
+  const day = dateMatch[1], month = dateMatch[2];
+  const yearRaw = parseInt(dateMatch[3]);
+  const yearCE = yearRaw > 2400 ? yearRaw - 543 : yearRaw;
+  if (yearCE < 2000 || yearCE > 2100) return null;
+  const dateISO = `${yearCE}-${month}-${day}`;
+
+  const afterDate = rowText.slice(rowText.indexOf(dateMatch[0]) + dateMatch[0].length).trim();
+  const amounts = [...afterDate.matchAll(/([\d,]+\.\d{2})/g)].map(m => parseFloat(m[1].replace(/,/g, '')));
+  if (amounts.length < 2) return null;
+
+  const balance = amounts[amounts.length - 1];
+  let txAmount, type;
+
+  if (amounts.length >= 3) {
+    const withdrawal = amounts[amounts.length - 3];
+    const deposit    = amounts[amounts.length - 2];
+    if (deposit > 0 && withdrawal === 0) {
+      txAmount = deposit; type = 'income';
+    } else {
+      txAmount = withdrawal; type = 'expense';
+    }
+  } else {
+    txAmount = amounts[0];
+    const lower = afterDate.toLowerCase();
+    type = /รับ|โอนเข้า|ฝาก|เงินเดือน|credit/.test(lower) ? 'income' : 'expense';
+  }
+
+  if (!txAmount || txAmount <= 0) return null;
+  const desc = afterDate.replace(/([\d,]+\.\d{2})/g, '').replace(/\s+/g, ' ').trim() || 'KBank';
+
+  return { id: Date.now() + Math.random(), type, cat: 'อื่นๆ', desc, amount: txAmount, date: dateISO };
+}
+
+function confirmKBankImport() {
+  if (!pendingKBankTxs.length) return;
+  pendingKBankTxs.forEach(tx => state.transactions.unshift(tx));
+  pendingKBankTxs = [];
+  save(); renderTxTable(); renderOverview();
+  document.getElementById('import-msg').textContent = `✓ นำเข้า KBank PDF เรียบร้อย`;
+  closeModal('modal-pdf');
+}
+
 // ===== INIT =====
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 load();
 renderOverview();
 renderAssets();
