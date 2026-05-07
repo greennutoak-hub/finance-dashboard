@@ -175,6 +175,9 @@
 
   <div class="card">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="filter-month" style="width:auto;" onchange="renderTxTable()">
+        <option value="">ทุกเดือน</option>
+      </select>
       <select id="filter-type" style="width:auto;" onchange="renderTxTable()">
         <option value="">ทั้งหมด</option>
         <option value="income">รายรับ</option>
@@ -253,7 +256,7 @@
         <select id="tx-cat"><option>เงินเดือน</option><option>Freelance</option><option>ลงทุน</option><option>อาหาร</option><option>เดินทาง</option><option>บิล/ค่าใช้จ่ายคงที่</option><option>ช้อปปิ้ง</option><option>สุขภาพ</option><option>บันเทิง</option><option>อื่นๆ</option></select></div>
     </div>
     <div class="form-group" style="margin-bottom:10px;"><label>รายละเอียด</label>
-      <input id="tx-desc" placeholder="เช่น เงินเดือน, ค่าข้าว"></div>
+      <input id="tx-desc" placeholder="เช่น เงินเดือน, ค่าข้าว" oninput="autoCatSuggest()"></div>
     <div class="form-row">
       <div class="form-group"><label>จำนวน (บาท)</label><input type="number" id="tx-amount" placeholder="0" min="0" step="any"></div>
       <div class="form-group"><label>วันที่</label><input type="date" id="tx-date"></div>
@@ -393,14 +396,14 @@ function openEditTx(id) {
 }
 function saveTx() {
   const type = document.getElementById('tx-type').value;
-  const cat = document.getElementById('tx-cat').value;
+  const cat  = document.getElementById('tx-cat').value;
   const desc = document.getElementById('tx-desc').value.trim() || cat;
   const amount = parseFloat(document.getElementById('tx-amount').value);
   const date = document.getElementById('tx-date').value;
   if (!amount || !date) return alert('กรุณากรอกจำนวนและวันที่');
   if (editTxId) {
     const idx = state.transactions.findIndex(t => t.id === editTxId);
-    if (idx > -1) state.transactions[idx] = { ...state.transactions[idx], type, cat, desc, amount, date };
+    if (idx > -1) state.transactions[idx] = { ...state.transactions[idx], type, cat, desc, amount, date, flagged: false };
   } else {
     state.transactions.unshift({ id: Date.now(), type, cat, desc, amount, date });
   }
@@ -412,13 +415,28 @@ function deleteTx(id) {
   save(); renderTxTable(); renderOverview();
 }
 
+function populateMonthFilter() {
+  const sel = document.getElementById('filter-month');
+  if (!sel) return;
+  const current = sel.value;
+  const months = [...new Set(state.transactions.map(t => t.date.slice(0,7)))].sort().reverse();
+  sel.innerHTML = '<option value="">ทุกเดือน</option>' + months.map(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(parseInt(y), parseInt(mo)-1).toLocaleDateString('th-TH', {month:'short', year:'numeric'});
+    return `<option value="${m}"${m===current?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
 function renderTxTable() {
-  const typeF = document.getElementById('filter-type')?.value || '';
-  const catF = document.getElementById('filter-cat')?.value || '';
+  populateMonthFilter();
+  const monthF = document.getElementById('filter-month')?.value || '';
+  const typeF  = document.getElementById('filter-type')?.value || '';
+  const catF   = document.getElementById('filter-cat')?.value || '';
   const search = document.getElementById('filter-search')?.value.toLowerCase() || '';
   const txs = state.transactions.filter(t =>
-    (!typeF || t.type === typeF) &&
-    (!catF || t.cat === catF) &&
+    (!monthF || t.date.startsWith(monthF)) &&
+    (!typeF  || t.type === typeF) &&
+    (!catF   || t.cat === catF) &&
     (!search || t.desc.toLowerCase().includes(search))
   );
   const tbody = document.getElementById('tx-table');
@@ -432,7 +450,7 @@ function renderTxTable() {
   tbody.innerHTML = txs.map(t => `
     <tr>
       <td>${t.desc}</td>
-      <td><span class="cat-tag">${t.cat}</span></td>
+      <td><span class="cat-tag">${t.cat}</span>${t.flagged ? ' <span style="color:var(--amber);cursor:pointer;" title="หมวดหมู่ยังไม่แน่ใจ — คลิกแก้ไข" onclick="openEditTx(${t.id})">⚠️</span>' : ''}</td>
       <td style="color:var(--muted)">${t.date}</td>
       <td style="text-align:right;font-weight:600;" class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}฿${t.amount.toLocaleString()}</td>
       <td style="white-space:nowrap;">
@@ -817,7 +835,8 @@ function parseKBankRow(rowText) {
   const afterDate = rowText.slice(rowText.indexOf(dateMatch[0]) + dateMatch[0].length);
   const desc = afterDate.replace(/([\d,]+\.\d{2})/g, '').replace(/\s+/g, ' ').trim() || 'KBank';
 
-  return { id: Date.now() + Math.random(), type, cat: 'อื่นๆ', desc, amount: txAmount, date: dateISO };
+  const { cat, confident } = guessCategory(desc);
+  return { id: Date.now() + Math.random(), type, cat, flagged: !confident, desc, amount: txAmount, date: dateISO };
 }
 
 function confirmKBankImport() {
@@ -827,6 +846,37 @@ function confirmKBankImport() {
   save(); renderTxTable(); renderOverview();
   document.getElementById('import-msg').textContent = `✓ นำเข้า KBank PDF เรียบร้อย`;
   closeModal('modal-pdf');
+}
+
+// ===== AUTO-CATEGORIZE =====
+function guessCategory(desc) {
+  if (!desc) return { cat: 'อื่นๆ', confident: false };
+  const d = desc.toLowerCase();
+  if (/ร้านอาหาร|อาหาร|ชา|กาแฟ|coffee|\bfood\b|eatery|resto|\bmk\b|kfc|mcdo|swensen|grab food|ข้าว|ก๋วยเตี๋ยว|ส้มตำ|ปิ้งย่าง|บุฟเฟ่|sushi|pizza|burger/.test(d))
+    return { cat: 'อาหาร', confident: true };
+  if (/\bgrab\b(?!.*food)|bts|mrt|\btaxi\b|fuel|ปั๊มน้ำมัน|บางจาก|\bptt\b|\bshell\b|น้ำมัน|แก๊ส|ค่ารถ|toll|ด่วน/.test(d))
+    return { cat: 'เดินทาง', confident: true };
+  if (/\btrue\b|\bais\b|\bdtac\b|ntrue|ค่าน้ำ|ค่าไฟ|\bmea\b|\bpea\b|internet|โทรศัพท์|ค่าเช่า|ประกัน|ค่างวด/.test(d))
+    return { cat: 'บิล/ค่าใช้จ่ายคงที่', confident: true };
+  if (/lazada|shopee|\bamazon\b|\bshop\b|store|ห้าง|central|robinson|โลตัส|bigc|makro|ikea/.test(d))
+    return { cat: 'ช้อปปิ้ง', confident: true };
+  if (/โรงพยาบาล|hospital|clinic|pharmacy|ร้านยา|วัคซีน|แพทย์|\bหมอ\b|dental|ทันตกรรม/.test(d))
+    return { cat: 'สุขภาพ', confident: true };
+  if (/netflix|spotify|\bsteam\b|\bgame\b|cinema|\bsf\b|major|youtube|prime video|disney/.test(d))
+    return { cat: 'บันเทิง', confident: true };
+  if (/เงินเดือน|salary/.test(d))
+    return { cat: 'เงินเดือน', confident: true };
+  if (/freelance|ค่าจ้าง|ค่าบริการ|project/.test(d))
+    return { cat: 'Freelance', confident: true };
+  if (/ลงทุน|หุ้น|กองทุน|crypto|bitcoin|dividend|เงินปันผล/.test(d))
+    return { cat: 'ลงทุน', confident: true };
+  return { cat: 'อื่นๆ', confident: false };
+}
+
+function autoCatSuggest() {
+  const desc = document.getElementById('tx-desc').value;
+  const { cat, confident } = guessCategory(desc);
+  if (confident) document.getElementById('tx-cat').value = cat;
 }
 
 // ===== INIT =====
