@@ -106,6 +106,9 @@
   .modal h3 { font-size: 16px; margin-bottom: 16px; }
   .modal-footer { display: flex; gap: 8px; margin-top: 16px; }
 
+  .export-item { display:block; width:100%; text-align:left; padding:8px 12px; border-radius:6px; border:none; background:transparent; color:var(--text); cursor:pointer; font-size:13px; white-space:nowrap; }
+  .export-item:hover { background:var(--bg3); }
+
   @media (max-width: 600px) {
     .form-row { grid-template-columns: 1fr; }
     .grid-2 { grid-template-columns: 1fr; }
@@ -123,11 +126,25 @@
   <button class="tab-btn" onclick="showPage('portfolio', this)">พอร์ต</button>
   <button class="tab-btn" onclick="showPage('assets', this)">สินทรัพย์</button>
   <span class="spacer"></span>
+  <div style="position:relative;margin-right:8px;">
+    <button class="btn" onclick="toggleExportMenu()" style="padding:5px 12px;font-size:12px;">⬇ Export</button>
+    <div id="export-menu" style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px;min-width:180px;z-index:300;display:none;">
+      <button class="export-item" onclick="exportCSV()">📄 Export CSV</button>
+      <button class="export-item" onclick="exportJSON()">📦 Export JSON</button>
+      <button class="export-item" onclick="copySummary()">📋 Copy สรุปรายเดือน</button>
+    </div>
+  </div>
   <span class="save-indicator" id="save-indicator">✓ บันทึกแล้ว</span>
 </nav>
 
 <!-- ===== OVERVIEW ===== -->
 <div class="page active" id="page-overview">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <h2 style="font-size:15px;font-weight:600;">ภาพรวม</h2>
+    <select id="filter-overview-month" style="width:auto;" onchange="renderOverview()">
+      <option value="">ทั้งหมด</option>
+    </select>
+  </div>
   <div class="grid-4" id="summary-cards"></div>
   <div class="grid-2">
     <div class="card">
@@ -646,34 +663,63 @@ function renderAssets() {
 
 // ===== OVERVIEW =====
 let flowChartInstance = null, pieChartInstance = null;
+
+function populateOverviewMonthFilter() {
+  const sel = document.getElementById('filter-overview-month');
+  if (!sel) return;
+  const current = sel.value;
+  const months = [...new Set(state.transactions.map(t => t.date.slice(0,7)))].sort().reverse();
+  sel.innerHTML = '<option value="">ทั้งหมด</option>' + months.map(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(parseInt(y), parseInt(mo)-1).toLocaleDateString('th-TH', {month:'short', year:'numeric'});
+    return `<option value="${m}"${m===current?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
 function renderOverview() {
+  populateOverviewMonthFilter();
+  const sel = document.getElementById('filter-overview-month')?.value || '';
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0,7);
-  const prevMonth = new Date(now.getFullYear(), now.getMonth()-1).toISOString().slice(0,7);
-  const txThis = state.transactions.filter(t => t.date.startsWith(thisMonth));
-  const txPrev = state.transactions.filter(t => t.date.startsWith(prevMonth));
-  const income  = txThis.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-  const expense = txThis.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const prevInc = txPrev.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-  const prevExp = txPrev.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const net = income - expense;
-  const assetTotal = state.assets.reduce((s,a)=>s+a.value,0);
-  const incDiff = income - prevInc;
-  const expDiff = expense - prevExp;
+
+  // Determine which transactions to use
+  let txThis, txPrev, chartEnd;
+  if (sel) {
+    const [sy, sm] = sel.split('-').map(Number);
+    const prevDate = new Date(sy, sm - 2);
+    const prevKey  = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+    txThis   = state.transactions.filter(t => t.date.startsWith(sel));
+    txPrev   = state.transactions.filter(t => t.date.startsWith(prevKey));
+    chartEnd = new Date(sy, sm - 1);
+  } else {
+    txThis   = state.transactions;
+    txPrev   = [];
+    chartEnd = now;
+  }
+
+  const income   = txThis.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const expense  = txThis.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const prevInc  = txPrev.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const prevExp  = txPrev.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const net      = income - expense;
+  const assetTotal = state.assets.reduce((s,a)=>s+a.value, 0);
   const savingRate = income ? (net/income*100).toFixed(1) : null;
+  const incDiff  = income - prevInc;
+  const expDiff  = expense - prevExp;
+  const incLabel = sel ? 'รายรับเดือนที่เลือก' : 'รายรับรวมทั้งหมด';
+  const expLabel = sel ? 'รายจ่ายเดือนที่เลือก' : 'รายจ่ายรวมทั้งหมด';
 
   document.getElementById('summary-cards').innerHTML = `
     <div class="metric-card"><div class="metric-label">สินทรัพย์รวม</div><div class="metric-value green">฿${assetTotal.toLocaleString()}</div><div class="metric-sub">${state.assets.length} รายการ</div></div>
-    <div class="metric-card"><div class="metric-label">รายรับเดือนนี้</div><div class="metric-value blue">฿${income.toLocaleString()}</div><div class="metric-sub ${incDiff>=0?'green':'red'}">${incDiff>=0?'+':''}฿${incDiff.toLocaleString()} vs เดือนก่อน</div></div>
-    <div class="metric-card"><div class="metric-label">รายจ่ายเดือนนี้</div><div class="metric-value red">฿${expense.toLocaleString()}</div><div class="metric-sub ${expDiff<=0?'green':'red'}">${expDiff>=0?'+':''}฿${expDiff.toLocaleString()} vs เดือนก่อน</div></div>
+    <div class="metric-card"><div class="metric-label">${incLabel}</div><div class="metric-value blue">฿${income.toLocaleString()}</div>${sel?`<div class="metric-sub ${incDiff>=0?'green':'red'}">${incDiff>=0?'+':''}฿${incDiff.toLocaleString()} vs เดือนก่อน</div>`:''}</div>
+    <div class="metric-card"><div class="metric-label">${expLabel}</div><div class="metric-value red">฿${expense.toLocaleString()}</div>${sel?`<div class="metric-sub ${expDiff<=0?'green':'red'}">${expDiff>=0?'+':''}฿${expDiff.toLocaleString()} vs เดือนก่อน</div>`:''}</div>
     <div class="metric-card"><div class="metric-label">คงเหลือสุทธิ</div><div class="metric-value ${net>=0?'green':'red'}">฿${net.toLocaleString()}</div><div class="metric-sub">${savingRate !== null ? 'อัตราออม ' + savingRate + '%' : ''}</div></div>`;
 
-  // Bar chart — last 6 months
-  const months = [], incData = [], expData = [];
+  // Bar chart — 6 months ending at chartEnd
+  const barMonths = [], incData = [], expData = [];
   for (let i=5; i>=0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth()-i);
+    const d   = new Date(chartEnd.getFullYear(), chartEnd.getMonth()-i);
     const key = d.toISOString().slice(0,7);
-    months.push(d.toLocaleDateString('th-TH',{month:'short'}));
+    barMonths.push(d.toLocaleDateString('th-TH',{month:'short'}));
     const txM = state.transactions.filter(t => t.date.startsWith(key));
     incData.push(txM.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0));
     expData.push(txM.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0));
@@ -681,7 +727,7 @@ function renderOverview() {
   if (flowChartInstance) flowChartInstance.destroy();
   flowChartInstance = new Chart(document.getElementById('flowChart'), {
     type: 'bar',
-    data: { labels: months, datasets: [
+    data: { labels: barMonths, datasets: [
       { label:'รายรับ', data: incData, backgroundColor:'#34d399', borderRadius:4 },
       { label:'รายจ่าย', data: expData, backgroundColor:'#f87171', borderRadius:4 }
     ]},
@@ -694,9 +740,9 @@ function renderOverview() {
     }
   });
 
-  // Doughnut chart — expense categories
+  // Doughnut — expense categories for selected period
   const cats = {};
-  state.transactions.filter(t=>t.type==='expense').forEach(t=>{ cats[t.cat]=(cats[t.cat]||0)+t.amount; });
+  txThis.filter(t=>t.type==='expense').forEach(t=>{ cats[t.cat]=(cats[t.cat]||0)+t.amount; });
   const palette = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#fb923c','#38bdf8'];
   if (pieChartInstance) pieChartInstance.destroy();
   pieChartInstance = new Chart(document.getElementById('pieChart'), {
@@ -706,9 +752,9 @@ function renderOverview() {
       plugins:{ legend:{ position:'right', labels:{ color:'#888', font:{size:11}, boxWidth:10 } } } }
   });
 
-  // Recent transactions
+  // Recent transactions — filtered to selected period
   const tbody = document.getElementById('recent-tx-table');
-  const recent = state.transactions.slice(0,6);
+  const recent = txThis.slice(0,6);
   tbody.innerHTML = recent.length
     ? recent.map(t=>`
       <tr>
@@ -877,6 +923,56 @@ function autoCatSuggest() {
   const desc = document.getElementById('tx-desc').value;
   const { cat, confident } = guessCategory(desc);
   if (confident) document.getElementById('tx-cat').value = cat;
+}
+
+// ===== EXPORT =====
+function toggleExportMenu() {
+  const menu = document.getElementById('export-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#export-menu') && !e.target.closest('[onclick="toggleExportMenu()"]')) {
+    const menu = document.getElementById('export-menu');
+    if (menu) menu.style.display = 'none';
+  }
+});
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob(['﻿' + content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV() {
+  const sel = document.getElementById('filter-overview-month')?.value || '';
+  const txs = sel ? state.transactions.filter(t => t.date.startsWith(sel)) : state.transactions;
+  const header = 'วันที่,รายการ,หมวด,ประเภท,จำนวน,ธง';
+  const rows = txs.map(t => [t.date, `"${(t.desc||'').replace(/"/g,'""')}"`, t.cat, t.type==='income'?'รายรับ':'รายจ่าย', t.amount, t.flagged?'⚠️':''].join(','));
+  downloadFile([header,...rows].join('\n'), `transactions_${sel||'all'}.csv`, 'text/csv;charset=utf-8;');
+  document.getElementById('export-menu').style.display = 'none';
+}
+
+function exportJSON() {
+  downloadFile(JSON.stringify(state, null, 2), 'finance_data.json', 'application/json');
+  document.getElementById('export-menu').style.display = 'none';
+}
+
+function copySummary() {
+  const sel = document.getElementById('filter-overview-month')?.value || new Date().toISOString().slice(0,7);
+  const txs = state.transactions.filter(t => t.date.startsWith(sel));
+  const income  = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const net = income - expense;
+  const cats = {};
+  txs.filter(t=>t.type==='expense').forEach(t=>{ cats[t.cat]=(cats[t.cat]||0)+t.amount; });
+  const top3 = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const [y, m] = sel.split('-');
+  const label = new Date(parseInt(y), parseInt(m)-1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const text = `สรุปการเงิน ${label}\nรายรับ: ฿${income.toLocaleString()}\nรายจ่าย: ฿${expense.toLocaleString()}\nคงเหลือสุทธิ: ฿${net.toLocaleString()}\nอัตราออม: ${income?(net/income*100).toFixed(1):0}%\n\nหมวดจ่ายมากสุด:\n${top3.map((c,i)=>`${i+1}. ${c[0]}: ฿${c[1].toLocaleString()}`).join('\n')}\n\nรายการทั้งหมด: ${txs.length} รายการ`;
+  navigator.clipboard.writeText(text).then(() => alert('คัดลอกแล้ว!'));
+  document.getElementById('export-menu').style.display = 'none';
 }
 
 // ===== INIT =====
