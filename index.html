@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Dashboard</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --bg2: #16161d;
+    --bg3: #1e1e28;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0f0f5;
+    --muted: #888;
+    --green: #34d399;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+  
+  /* NAV */
+  nav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 4px; height: 52px; position: sticky; top: 0; z-index: 100; }
+  nav .logo { font-weight: 700; font-size: 16px; margin-right: 16px; color: var(--blue); }
+  .tab-btn { padding: 6px 14px; border-radius: 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; transition: all .15s; }
+  .tab-btn.active { background: var(--bg3); color: var(--text); }
+  nav .spacer { flex: 1; }
+  .save-indicator { font-size: 11px; color: var(--muted); }
+
+  /* LAYOUT */
+  .page { display: none; padding: 20px; max-width: 960px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 12px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 12px; margin-bottom: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .metric-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .metric-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .metric-value { font-size: 24px; font-weight: 600; }
+  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .blue { color: var(--blue); }
+  .amber { color: var(--amber); }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px 0; border-bottom: 1px solid var(--border); }
+  td { padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge-red { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-blue { background: rgba(96,165,250,.12); color: var(--blue); }
+
+  /* FORM */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .form-group label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; transition: border-color .15s; }
+  input:focus, select:focus { border-color: var(--blue); }
+  select option { background: var(--bg3); }
+  .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 13px; transition: all .15s; }
+  .btn:hover { background: var(--bg3); }
+  .btn-primary { background: var(--blue); color: #000; border-color: var(--blue); font-weight: 600; }
+  .btn-primary:hover { opacity: .9; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-danger { color: var(--red); border-color: rgba(248,113,113,.3); }
+  .btn-danger:hover { background: rgba(248,113,113,.1); }
+
+  /* CHART */
+  .chart-wrap { position: relative; height: 220px; width: 100%; }
+
+  /* UPLOAD */
+  .upload-zone { border: 1px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; transition: all .15s; margin-bottom: 12px; }
+  .upload-zone:hover { border-color: var(--blue); color: var(--blue); }
+
+  /* SECTION HEADER */
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .section-header h2 { font-size: 15px; font-weight: 600; }
+  
+  /* STOCK ROW */
+  .stock-symbol { font-weight: 600; font-size: 14px; }
+  .stock-name { font-size: 11px; color: var(--muted); }
+  
+  /* TAG */
+  .cat-tag { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10px; background: var(--bg3); color: var(--muted); margin-right: 4px; }
+
+  /* PRICE GRID */
+  .price-refresh-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .refresh-time { font-size: 11px; color: var(--muted); }
+
+  /* ASSET BAR */
+  .asset-bar-wrap { height: 8px; background: var(--bg3); border-radius: 99px; overflow: hidden; margin: 6px 0; }
+  .asset-bar-fill { height: 100%; border-radius: 99px; transition: width .5s; }
+
+  /* MODAL OVERLAY */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: 100%; max-width: 420px; }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    nav .logo { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">💰 Finance</span>
+  <button class="tab-btn active" onclick="showPage('overview')">ภาพรวม</button>
+  <button class="tab-btn" onclick="showPage('transactions')">รายการ</button>
+  <button class="tab-btn" onclick="showPage('portfolio')">พอร์ต</button>
+  <button class="tab-btn" onclick="showPage('assets')">สินทรัพย์</button>
+  <span class="spacer"></span>
+  <span class="save-indicator" id="save-indicator">✓ บันทึกแล้ว</span>
+</nav>
+
+<!-- ===== OVERVIEW ===== -->
+<div class="page active" id="page-overview">
+  <div class="grid-4" id="summary-cards"></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">รายรับ vs รายจ่าย (6 เดือน)</div>
+      <div class="chart-wrap"><canvas id="flowChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">หมวดค่าใช้จ่าย</div>
+      <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">รายการล่าสุด</div>
+    <table><thead><tr><th>รายการ</th><th>หมวด</th><th>วันที่</th><th style="text-align:right">จำนวน</th></tr></thead>
+    <tbody id="recent-tx-table"></tbody></table>
+  </div>
+</div>
+
+<!-- ===== TRANSACTIONS ===== -->
+<div class="page" id="page-transactions">
+  <div class="section-header"><h2>รายการรายรับรายจ่าย</h2>
+    <button class="btn btn-primary" onclick="openAddTx()">+ เพิ่มรายการ</button>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+      <div style="font-size:24px;margin-bottom:8px;">📎</div>
+      <div>อัปโหลด Bank Statement (.csv, .xlsx) หรือใบเสร็จ</div>
+      <div style="font-size:11px;margin-top:4px;">หรือลากไฟล์มาวางที่นี่</div>
+      <input type="file" id="fileInput" style="display:none" accept=".csv" onchange="handleCSV(event)">
+    </div>
+    <div id="import-msg" style="font-size:12px;color:var(--muted);"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="filter-type" style="width:auto;" onchange="renderTxTable()">
+        <option value="">ทั้งหมด</option>
+        <option value="income">รายรับ</option>
+        <option value="expense">รายจ่าย</option>
+      </select>
+      <select id="filter-cat" style="width:auto;" onchange="renderTxTable()">
+        <option value="">ทุกหมวด</option>
+        <option>เงินเดือน</option><option>Freelance</option><option>ลงทุน</option>
+        <option>อาหาร</option><option>เดินทาง</option><option>บิล/ค่าใช้จ่ายคงที่</option>
+        <option>ช้อปปิ้ง</option><option>สุขภาพ</option><option>บันเทิง</option><option>อื่นๆ</option>
+      </select>
+      <input id="filter-search" style="width:160px;" placeholder="ค้นหา..." oninput="renderTxTable()">
+    </div>
+    <table>
+      <thead><tr><th>รายการ</th><th>หมวด</th><th>วันที่</th><th style="text-align:right">จำนวน</th><th></th></tr></thead>
+      <tbody id="tx-table"></tbody>
+    </table>
+    <div id="tx-empty" style="text-align:center;padding:24px;color:var(--muted);display:none;">ยังไม่มีรายการ — กด "+ เพิ่มรายการ" ได้เลย</div>
+  </div>
+</div>
+
+<!-- ===== PORTFOLIO ===== -->
+<div class="page" id="page-portfolio">
+  <div class="section-header"><h2>พอร์ตลงทุน</h2>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="refreshPrices()">🔄 รีเฟรชราคา</button>
+      <button class="btn btn-primary" onclick="openAddStock()">+ เพิ่มหุ้น</button>
+    </div>
+  </div>
+  <div class="grid-4" id="portfolio-summary"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="price-refresh-row">
+      <div class="card-title" style="margin:0;">หุ้นไทย (SET/mai)</div>
+      <span class="refresh-time" id="th-refresh-time">—</span>
+    </div>
+    <table><thead><tr><th>หุ้น</th><th>จำนวนหุ้น</th><th>ราคาปัจจุบัน</th><th>มูลค่า</th><th>เปลี่ยน%</th><th></th></tr></thead>
+    <tbody id="th-table"></tbody></table>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-title">หุ้นสหรัฐ (NYSE/NASDAQ)</div>
+    <table><thead><tr><th>หุ้น</th><th>จำนวนหุ้น</th><th>ราคา (USD)</th><th>มูลค่า (USD)</th><th>เปลี่ยน%</th><th></th></tr></thead>
+    <tbody id="us-table"></tbody></table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Crypto</div>
+    <table><thead><tr><th>เหรียญ</th><th>จำนวน</th><th>ราคา (USD)</th><th>มูลค่า (USD)</th><th>เปลี่ยน%</th><th></th></tr></thead>
+    <tbody id="crypto-table"></tbody></table>
+  </div>
+</div>
+
+<!-- ===== ASSETS ===== -->
+<div class="page" id="page-assets">
+  <div class="section-header"><h2>สินทรัพย์ทั้งหมด</h2>
+    <button class="btn btn-primary" onclick="openAddAsset()">+ เพิ่มสินทรัพย์</button>
+  </div>
+  <div class="grid-4" id="asset-summary"></div>
+  <div class="card" id="asset-list-card">
+    <div class="card-title">รายการสินทรัพย์</div>
+    <div id="asset-list"></div>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+<div class="modal-bg" id="modal-tx">
+  <div class="modal">
+    <h3 id="modal-tx-title">เพิ่มรายการ</h3>
+    <div class="form-row">
+      <div class="form-group"><label>ประเภท</label>
+        <select id="tx-type"><option value="income">รายรับ</option><option value="expense">รายจ่าย</option></select></div>
+      <div class="form-group"><label>หมวดหมู่</label>
+        <select id="tx-cat"><option>เงินเดือน</option><option>Freelance</option><option>ลงทุน</option><option>อาหาร</option><option>เดินทาง</option><option>บิล/ค่าใช้จ่ายคงที่</option><option>ช้อปปิ้ง</option><option>สุขภาพ</option><option>บันเทิง</option><option>อื่นๆ</option></select></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;"><label>รายละเอียด</label>
+      <input id="tx-desc" placeholder="เช่น เงินเดือน, ค่าข้าว"></div>
+    <div class="form-row">
+      <div class="form-group"><label>จำนวน (บาท)</label><input type="number" id="tx-amount" placeholder="0" min="0"></div>
+      <div class="form-group"><label>วันที่</label><input type="date" id="tx-date"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-primary" onclick="saveTx()">บันทึก</button>
+      <button class="btn" onclick="closeModal('modal-tx')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-stock">
+  <div class="modal">
+    <h3>เพิ่ม/แก้ไขหุ้น</h3>
+    <div class="form-row">
+      <div class="form-group"><label>ตลาด</label>
+        <select id="stock-market"><option value="th">หุ้นไทย (SET)</option><option value="us">หุ้นสหรัฐ</option><option value="crypto">Crypto</option></select></div>
+      <div class="form-group"><label>Ticker / Symbol</label><input id="stock-symbol" placeholder="เช่น PTT, AAPL, BTC"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ชื่อ (ไม่บังคับ)</label><input id="stock-name" placeholder="ชื่อเต็ม"></div>
+      <div class="form-group"><label>จำนวนหุ้น / เหรียญ</label><input type="number" id="stock-qty" placeholder="0" step="any"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;"><label>ราคาทุนเฉลี่ย (ต่อหน่วย)</label><input type="number" id="stock-cost" placeholder="0" step="any"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveStock()">บันทึก</button>
+      <button class="btn" onclick="closeModal('modal-stock')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-asset">
+  <div class="modal">
+    <h3>เพิ่มสินทรัพย์</h3>
+    <div class="form-group" style="margin-bottom:10px;"><label>ประเภท</label>
+      <select id="asset-type"><option>เงินสด / บัญชีออมทรัพย์</option><option>อสังหาริมทรัพย์</option><option>ยานพาหนะ</option><option>กองทุนรวม</option><option>ประกันชีวิต</option><option>อื่นๆ</option></select></div>
+    <div class="form-group" style="margin-bottom:10px;"><label>ชื่อ / รายละเอียด</label><input id="asset-name" placeholder="เช่น KBank ออมทรัพย์, คอนโด ลาดพร้าว"></div>
+    <div class="form-group" style="margin-bottom:10px;"><label>มูลค่า (บาท)</label><input type="number" id="asset-value" placeholder="0"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveAsset()">บันทึก</button>
+      <button class="btn" onclick="closeModal('modal-asset')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ===== STATE =====
+let state = {
+  transactions: [],
+  stocks: { th: [], us: [], crypto: [] },
+  assets: [],
+  prices: {},
+  lastPriceUpdate: null
+};
+
+// ===== STORAGE =====
+function save() {
+  localStorage.setItem('financeData', JSON.stringify(state));
+  const el = document.getElementById('save-indicator');
+  el.textContent = '✓ บันทึกแล้ว ' + new Date().toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
+}
+function load() {
+  const d = localStorage.getItem('financeData');
+  if (d) state = { ...state, ...JSON.parse(d) };
+}
+
+// ===== NAV =====
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'overview') renderOverview();
+  if (name === 'portfolio') renderPortfolio();
+  if (name === 'assets') renderAssets();
+  if (name === 'transactions') renderTxTable();
+}
+
+// ===== MODAL =====
+let editTxId = null;
+function openAddTx() {
+  editTxId = null;
+  document.getElementById('modal-tx-title').textContent = 'เพิ่มรายการ';
+  document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('tx-desc').value = '';
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('modal-tx').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openAddStock() { document.getElementById('modal-stock').classList.add('open'); }
+function openAddAsset() { document.getElementById('modal-asset').classList.add('open'); }
+
+// ===== TRANSACTIONS =====
+function saveTx() {
+  const type = document.getElementById('tx-type').value;
+  const cat = document.getElementById('tx-cat').value;
+  const desc = document.getElementById('tx-desc').value.trim() || cat;
+  const amount = parseFloat(document.getElementById('tx-amount').value);
+  const date = document.getElementById('tx-date').value;
+  if (!amount || !date) return alert('กรุณากรอกจำนวนและวันที่');
+  if (editTxId) {
+    const idx = state.transactions.findIndex(t => t.id === editTxId);
+    if (idx > -1) state.transactions[idx] = { ...state.transactions[idx], type, cat, desc, amount, date };
+  } else {
+    state.transactions.unshift({ id: Date.now(), type, cat, desc, amount, date });
+  }
+  save(); closeModal('modal-tx'); renderTxTable(); renderOverview();
+}
+function deleteTx(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  save(); renderTxTable(); renderOverview();
+}
+
+function renderTxTable() {
+  const typeF = document.getElementById('filter-type')?.value || '';
+  const catF = document.getElementById('filter-cat')?.value || '';
+  const search = document.getElementById('filter-search')?.value.toLowerCase() || '';
+  let txs = state.transactions.filter(t =>
+    (!typeF || t.type === typeF) &&
+    (!catF || t.cat === catF) &&
+    (!search || t.desc.toLowerCase().includes(search))
+  );
+  const tbody = document.getElementById('tx-table');
+  const empty = document.getElementById('tx-empty');
+  if (!txs.length) { tbody.innerHTML = ''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = txs.map(t => `
+    <tr>
+      <td>${t.desc}</td>
+      <td><span class="cat-tag">${t.cat}</span></td>
+      <td style="color:var(--muted)">${t.date}</td>
+      <td style="text-align:right;font-weight:600;" class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}฿${t.amount.toLocaleString()}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteTx(${t.id})">ลบ</button></td>
+    </tr>`).join('');
+}
+
+// ===== CSV IMPORT =====
+function handleCSV(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const lines = ev.target.result.split('\n').filter(l => l.trim());
+    let imported = 0;
+    lines.slice(1).forEach(line => {
+      const cols = line.split(',').map(c => c.trim().replace(/"/g,''));
+      if (cols.length < 3) return;
+      const date = cols[0] || new Date().toISOString().split('T')[0];
+      const desc = cols[1] || 'นำเข้า';
+      const amount = parseFloat(cols[2].replace(/[^0-9.-]/g,''));
+      if (isNaN(amount)) return;
+      const type = amount >= 0 ? 'income' : 'expense';
+      state.transactions.push({ id: Date.now() + Math.random(), type, cat: 'อื่นๆ', desc, amount: Math.abs(amount), date });
+      imported++;
+    });
+    save(); renderTxTable(); renderOverview();
+    document.getElementById('import-msg').textContent = `✓ นำเข้า ${imported} รายการเรียบร้อย`;
+  };
+  reader.readAsText(file);
+}
+
+// ===== STOCKS =====
+function saveStock() {
+  const market = document.getElementById('stock-market').value;
+  const symbol = document.getElementById('stock-symbol').value.trim().toUpperCase();
+  const name = document.getElementById('stock-name').value.trim() || symbol;
+  const qty = parseFloat(document.getElementById('stock-qty').value);
+  const cost = parseFloat(document.getElementById('stock-cost').value) || 0;
+  if (!symbol || !qty) return alert('กรุณากรอก Ticker และจำนวน');
+  const existing = state.stocks[market].findIndex(s => s.symbol === symbol);
+  const entry = { symbol, name, qty, cost };
+  if (existing > -1) state.stocks[market][existing] = entry;
+  else state.stocks[market].push(entry);
+  save(); closeModal('modal-stock'); renderPortfolio();
+  ['stock-symbol','stock-name','stock-qty','stock-cost'].forEach(id => document.getElementById(id).value = '');
+}
+function deleteStock(market, symbol) {
+  state.stocks[market] = state.stocks[market].filter(s => s.symbol !== symbol);
+  save(); renderPortfolio();
+}
+
+function renderStockTable(market, tbodyId, currency) {
+  const stocks = state.stocks[market] || [];
+  const tbody = document.getElementById(tbodyId);
+  if (!stocks.length) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:16px 0;">ยังไม่มีหุ้น — กด "+ เพิ่มหุ้น"</td></tr>`; return; }
+  tbody.innerHTML = stocks.map(s => {
+    const price = state.prices[s.symbol] || 0;
+    const change = state.prices[s.symbol + '_chg'] || 0;
+    const val = price * s.qty;
+    const badgeCls = change >= 0 ? 'badge-green' : 'badge-red';
+    const sign = change >= 0 ? '+' : '';
+    const cur = currency === 'THB' ? '฿' : '$';
+    return `<tr>
+      <td><div class="stock-symbol">${s.symbol}</div><div class="stock-name">${s.name}</div></td>
+      <td>${s.qty.toLocaleString()}</td>
+      <td>${price ? cur + price.toLocaleString() : '—'}</td>
+      <td>${val ? cur + val.toLocaleString(undefined,{maximumFractionDigits:0}) : '—'}</td>
+      <td>${change !== 0 ? `<span class="badge ${badgeCls}">${sign}${change.toFixed(2)}%</span>` : '—'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteStock('${market}','${s.symbol}')">ลบ</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPortfolio() {
+  renderStockTable('th', 'th-table', 'THB');
+  renderStockTable('us', 'us-table', 'USD');
+  renderStockTable('crypto', 'crypto-table', 'USD');
+  const thVal = state.stocks.th.reduce((s,x) => s + (state.prices[x.symbol]||0)*x.qty, 0);
+  const usVal = state.stocks.us.reduce((s,x) => s + (state.prices[x.symbol]||0)*x.qty, 0);
+  const crVal = state.stocks.crypto.reduce((s,x) => s + (state.prices[x.symbol]||0)*x.qty, 0);
+  document.getElementById('portfolio-summary').innerHTML = `
+    <div class="metric-card"><div class="metric-label">หุ้นไทย</div><div class="metric-value blue">฿${thVal.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="metric-card"><div class="metric-label">หุ้นสหรัฐ</div><div class="metric-value green">$${usVal.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="metric-card"><div class="metric-label">Crypto</div><div class="metric-value amber">$${crVal.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="metric-card"><div class="metric-label">อัปเดตล่าสุด</div><div class="metric-value" style="font-size:14px;">${state.lastPriceUpdate || '—'}</div></div>`;
+  if (state.lastPriceUpdate) document.getElementById('th-refresh-time').textContent = state.lastPriceUpdate;
+}
+
+// ===== PRICE REFRESH =====
+async function refreshPrices() {
+  // Use Yahoo Finance via allorigins proxy
+  const thSymbols = state.stocks.th.map(s => s.symbol + '.BK');
+  const usSymbols = state.stocks.us.map(s => s.symbol);
+  const cryptoMap = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'BNB': 'binancecoin', 'SOL': 'solana', 'ADA': 'cardano', 'XRP': 'ripple', 'DOGE': 'dogecoin' };
+  const cryptoIds = state.stocks.crypto.map(s => cryptoMap[s.symbol] || s.symbol.toLowerCase()).join(',');
+  let updated = false;
+
+  // Fetch Thai + US stocks via Yahoo Finance (allorigins CORS proxy)
+  const allYahoo = [...thSymbols, ...usSymbols];
+  if (allYahoo.length) {
+    try {
+      const query = allYahoo.join('%2C');
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${query}&fields=regularMarketPrice,regularMarketChangePercent`;
+      const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+      const json = await res.json();
+      const data = JSON.parse(json.contents);
+      data.quoteResponse?.result?.forEach(q => {
+        const sym = q.symbol.replace('.BK','');
+        state.prices[sym] = q.regularMarketPrice;
+        state.prices[sym + '_chg'] = q.regularMarketChangePercent;
+        updated = true;
+      });
+    } catch(e) { console.warn('Yahoo fetch failed', e); }
+  }
+
+  // Fetch Crypto via CoinGecko
+  if (cryptoIds) {
+    try {
+      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds}&vs_currencies=usd&include_24hr_change=true`);
+      const data = await res.json();
+      state.stocks.crypto.forEach(s => {
+        const id = cryptoMap[s.symbol] || s.symbol.toLowerCase();
+        if (data[id]) {
+          state.prices[s.symbol] = data[id].usd;
+          state.prices[s.symbol + '_chg'] = data[id].usd_24h_change;
+          updated = true;
+        }
+      });
+    } catch(e) { console.warn('CoinGecko fetch failed', e); }
+  }
+
+  if (updated) {
+    state.lastPriceUpdate = new Date().toLocaleString('th-TH', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    save();
+  }
+  renderPortfolio();
+}
+
+// ===== ASSETS =====
+function saveAsset() {
+  const type = document.getElementById('asset-type').value;
+  const name = document.getElementById('asset-name').value.trim();
+  const value = parseFloat(document.getElementById('asset-value').value);
+  if (!name || !value) return alert('กรุณากรอกชื่อและมูลค่า');
+  state.assets.push({ id: Date.now(), type, name, value });
+  save(); closeModal('modal-asset'); renderAssets();
+  document.getElementById('asset-name').value = '';
+  document.getElementById('asset-value').value = '';
+}
+function deleteAsset(id) {
+  state.assets = state.assets.filter(a => a.id !== id);
+  save(); renderAssets();
+}
+function renderAssets() {
+  const total = state.assets.reduce((s,a) => s + a.value, 0);
+  const colors = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#fb923c'];
+  document.getElementById('asset-summary').innerHTML = `
+    <div class="metric-card"><div class="metric-label">สินทรัพย์รวม</div><div class="metric-value green">฿${total.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="metric-label">จำนวนรายการ</div><div class="metric-value">${state.assets.length}</div></div>`;
+  document.getElementById('asset-list').innerHTML = state.assets.length
+    ? state.assets.map((a,i) => {
+        const pct = total ? ((a.value/total)*100).toFixed(1) : 0;
+        const color = colors[i % colors.length];
+        return `<div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><div style="font-weight:600;font-size:13px;">${a.name}</div><div style="font-size:11px;color:var(--muted);">${a.type}</div></div>
+            <div style="text-align:right;display:flex;align-items:center;gap:10px;">
+              <div><div style="font-weight:600;">฿${a.value.toLocaleString()}</div><div style="font-size:11px;color:var(--muted);">${pct}%</div></div>
+              <button class="btn btn-sm btn-danger" onclick="deleteAsset(${a.id})">ลบ</button>
+            </div>
+          </div>
+          <div class="asset-bar-wrap"><div class="asset-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--muted);padding:16px 0;">ยังไม่มีสินทรัพย์ — กด "+ เพิ่มสินทรัพย์"</div>';
+}
+
+// ===== OVERVIEW =====
+let flowChartInstance = null, pieChartInstance = null;
+function renderOverview() {
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0,7);
+  const prevMonth = new Date(now.getFullYear(), now.getMonth()-1).toISOString().slice(0,7);
+  const txThis = state.transactions.filter(t => t.date.startsWith(thisMonth));
+  const txPrev = state.transactions.filter(t => t.date.startsWith(prevMonth));
+  const income = txThis.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = txThis.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const prevIncome = txPrev.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const prevExpense = txPrev.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const net = income - expense;
+  const assetTotal = state.assets.reduce((s,a)=>s+a.value,0);
+  const incDiff = income - prevIncome;
+  const expDiff = expense - prevExpense;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="metric-card"><div class="metric-label">สินทรัพย์รวม</div><div class="metric-value green">฿${assetTotal.toLocaleString()}</div><div class="metric-sub">${state.assets.length} รายการ</div></div>
+    <div class="metric-card"><div class="metric-label">รายรับเดือนนี้</div><div class="metric-value blue">฿${income.toLocaleString()}</div><div class="metric-sub ${incDiff>=0?'green':'red'}">${incDiff>=0?'+':''}฿${incDiff.toLocaleString()} vs เดือนก่อน</div></div>
+    <div class="metric-card"><div class="metric-label">รายจ่ายเดือนนี้</div><div class="metric-value red">฿${expense.toLocaleString()}</div><div class="metric-sub ${expDiff<=0?'green':'red'}">${expDiff>=0?'+':''}฿${expDiff.toLocaleString()} vs เดือนก่อน</div></div>
+    <div class="metric-card"><div class="metric-label">คงเหลือสุทธิ</div><div class="metric-value ${net>=0?'green':'red'}">฿${net.toLocaleString()}</div><div class="metric-sub">${income?'อัตราออม '+(net/income*100).toFixed(1)+'%':''}</div></div>`;
+
+  // Flow chart — last 6 months
+  const months = [];
+  const incData = [], expData = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i);
+    const key = d.toISOString().slice(0,7);
+    months.push(d.toLocaleDateString('th-TH',{month:'short'}));
+    const txM = state.transactions.filter(t => t.date.startsWith(key));
+    incData.push(txM.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0));
+    expData.push(txM.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0));
+  }
+  if (flowChartInstance) flowChartInstance.destroy();
+  flowChartInstance = new Chart(document.getElementById('flowChart'), {
+    type: 'bar',
+    data: { labels: months, datasets: [
+      { label:'รายรับ', data: incData, backgroundColor:'#34d399', borderRadius:4 },
+      { label:'รายจ่าย', data: expData, backgroundColor:'#f87171', borderRadius:4 }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{grid:{display:false}, ticks:{color:'#888',font:{size:10}}},
+                y:{grid:{color:'rgba(255,255,255,.05)'}, ticks:{color:'#888',font:{size:10}, callback:v=>'฿'+(v/1000).toFixed(0)+'k'}} }}
+  });
+
+  // Pie chart — categories
+  const cats = {};
+  state.transactions.filter(t=>t.type==='expense').forEach(t=>{ cats[t.cat]=(cats[t.cat]||0)+t.amount; });
+  const labels = Object.keys(cats), vals = Object.values(cats);
+  const palette = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#fb923c','#38bdf8'];
+  if (pieChartInstance) pieChartInstance.destroy();
+  pieChartInstance = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data:vals, backgroundColor:palette, borderWidth:0 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'60%',
+      plugins:{ legend:{ position:'right', labels:{ color:'#888', font:{size:11}, boxWidth:10 } } } }
+  });
+
+  // Recent tx
+  const tbody = document.getElementById('recent-tx-table');
+  const recent = state.transactions.slice(0,6);
+  tbody.innerHTML = recent.length ? recent.map(t=>`
+    <tr>
+      <td>${t.desc}</td>
+      <td><span class="cat-tag">${t.cat}</span></td>
+      <td style="color:var(--muted)">${t.date}</td>
+      <td style="text-align:right;font-weight:600;" class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}฿${t.amount.toLocaleString()}</td>
+    </tr>`).join('')
+  : '<tr><td colspan="4" style="color:var(--muted);padding:16px 0;">ยังไม่มีรายการ</td></tr>';
+}
+
+// ===== INIT =====
+load();
+renderOverview();
+renderAssets();
+</script>
+</body>
+</html>
