@@ -308,11 +308,11 @@
     <h3>📄 นำเข้า KBank K+ PDF Statement</h3>
     <div class="form-group" style="margin-bottom:6px;">
       <label>รหัส PDF (วันเกิด 6 หลัก ปีพ.ศ.)</label>
-      <input type="text" id="pdf-password" maxlength="6" placeholder="เช่น 010165" pattern="\d{6}"
+      <input type="text" id="pdf-password" maxlength="8" placeholder="เช่น 05011970" pattern="\d{8}"
              style="letter-spacing:4px;font-size:18px;text-align:center;">
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">
-      รูปแบบ DDMMYY — เช่น เกิด 1 ม.ค. 2565 = <strong style="color:var(--text);">010165</strong>
+      รูปแบบ DDMMYYYY (ปีค.ศ.) — เช่น เกิด 5 ม.ค. 1970 = <strong style="color:var(--text);">05011970</strong>
     </div>
     <div id="pdf-status" style="font-size:12px;color:var(--muted);min-height:18px;margin-bottom:10px;"></div>
     <div id="pdf-preview" style="max-height:260px;overflow-y:auto;margin-bottom:10px;"></div>
@@ -722,8 +722,8 @@ function handlePDF(e) {
 
 async function importKBankPDF() {
   const password = document.getElementById('pdf-password').value.trim();
-  if (!/^\d{6}$/.test(password)) {
-    document.getElementById('pdf-status').textContent = '⚠️ กรุณากรอกรหัส 6 หลัก เช่น 010165';
+  if (!/^\d{8}$/.test(password)) {
+    document.getElementById('pdf-status').textContent = '⚠️ กรุณากรอกรหัส 8 หลัก เช่น 05011970';
     return;
   }
   const statusEl = document.getElementById('pdf-status');
@@ -796,8 +796,9 @@ function parseKBankRow(rowText) {
   if (!dateMatch) return null;
   const day = dateMatch[1], month = dateMatch[2];
   const yearRaw = parseInt(dateMatch[3]);
+  // PDF dates may be in BE (>2400) or CE — normalise to CE
   const yearCE = yearRaw > 2400 ? yearRaw - 543 : yearRaw;
-  if (yearCE < 2000 || yearCE > 2100) return null;
+  if (yearCE < 1990 || yearCE > 2100) return null;
   const dateISO = `${yearCE}-${month}-${day}`;
 
   const afterDate = rowText.slice(rowText.indexOf(dateMatch[0]) + dateMatch[0].length).trim();
