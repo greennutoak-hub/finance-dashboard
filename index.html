@@ -792,37 +792,29 @@ async function importKBankPDF() {
 }
 
 function parseKBankRow(rowText) {
-  const dateMatch = rowText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  // Format: DD-MM-YY  HH:MM  รายการ  จำนวน(บาท)  ยอดคงเหลือ  ช่องทาง  รายละเอียด
+  // Date: DD-MM-YY, 2-digit CE year (26 = 2026)
+  const dateMatch = rowText.match(/\b(\d{2})-(\d{2})-(\d{2})\b/);
   if (!dateMatch) return null;
   const day = dateMatch[1], month = dateMatch[2];
-  const yearRaw = parseInt(dateMatch[3]);
-  // PDF dates may be in BE (>2400) or CE — normalise to CE
-  const yearCE = yearRaw > 2400 ? yearRaw - 543 : yearRaw;
-  if (yearCE < 1990 || yearCE > 2100) return null;
+  const yearCE = 2000 + parseInt(dateMatch[3]);
   const dateISO = `${yearCE}-${month}-${day}`;
 
-  const afterDate = rowText.slice(rowText.indexOf(dateMatch[0]) + dateMatch[0].length).trim();
-  const amounts = [...afterDate.matchAll(/([\d,]+\.\d{2})/g)].map(m => parseFloat(m[1].replace(/,/g, '')));
-  if (amounts.length < 2) return null;
+  // Classify by รายการ column keyword
+  const isExpense = /ถอน|ชำระ/.test(rowText);
+  const isIncome  = /โอนเงินเข้า|รับโอน/.test(rowText);
+  if (!isExpense && !isIncome) return null; // header/summary rows have no keyword
+  const type = isIncome ? 'income' : 'expense';
 
-  const balance = amounts[amounts.length - 1];
-  let txAmount, type;
+  // First amount = transaction amount (ถอนเงิน/ฝากเงิน column)
+  const amounts = [...rowText.matchAll(/([\d,]+\.\d{2})/g)]
+    .map(m => parseFloat(m[1].replace(/,/g, '')));
+  if (!amounts.length) return null;
+  const txAmount = amounts[0];
+  if (txAmount <= 0) return null;
 
-  if (amounts.length >= 3) {
-    const withdrawal = amounts[amounts.length - 3];
-    const deposit    = amounts[amounts.length - 2];
-    if (deposit > 0 && withdrawal === 0) {
-      txAmount = deposit; type = 'income';
-    } else {
-      txAmount = withdrawal; type = 'expense';
-    }
-  } else {
-    txAmount = amounts[0];
-    const lower = afterDate.toLowerCase();
-    type = /รับ|โอนเข้า|ฝาก|เงินเดือน|credit/.test(lower) ? 'income' : 'expense';
-  }
-
-  if (!txAmount || txAmount <= 0) return null;
+  // Description = time + รายการ + รายละเอียด (text after date, numbers removed)
+  const afterDate = rowText.slice(rowText.indexOf(dateMatch[0]) + dateMatch[0].length);
   const desc = afterDate.replace(/([\d,]+\.\d{2})/g, '').replace(/\s+/g, ' ').trim() || 'KBank';
 
   return { id: Date.now() + Math.random(), type, cat: 'อื่นๆ', desc, amount: txAmount, date: dateISO };
