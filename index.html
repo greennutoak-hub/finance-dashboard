@@ -29,9 +29,6 @@
   .tab-btn.active { background: var(--bg3); color: var(--text); }
   nav .spacer { flex: 1; }
   .save-indicator { font-size: 11px; color: var(--muted); white-space: nowrap; }
-  .btn-icon { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; transition: all .15s; }
-  .btn-icon:hover { background: var(--bg3); color: var(--text); }
-
   /* LAYOUT */
   .page { display: none; padding: 20px; max-width: 960px; margin: 0 auto; }
   .page.active { display: block; }
@@ -109,9 +106,6 @@
   .modal h3 { font-size: 16px; margin-bottom: 16px; }
   .modal-footer { display: flex; gap: 8px; margin-top: 16px; }
 
-  /* API KEY NOTICE */
-  .api-notice { background: rgba(96,165,250,.08); border: 1px solid rgba(96,165,250,.2); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--blue); margin-bottom: 12px; }
-
   @media (max-width: 600px) {
     .form-row { grid-template-columns: 1fr; }
     .grid-2 { grid-template-columns: 1fr; }
@@ -129,8 +123,7 @@
   <button class="tab-btn" onclick="showPage('portfolio', this)">พอร์ต</button>
   <button class="tab-btn" onclick="showPage('assets', this)">สินทรัพย์</button>
   <span class="spacer"></span>
-  <button class="btn-icon" onclick="openSettings()" title="ตั้งค่า">⚙️</button>
-  <span class="save-indicator" id="save-indicator" style="margin-left:8px;">✓ บันทึกแล้ว</span>
+  <span class="save-indicator" id="save-indicator">✓ บันทึกแล้ว</span>
 </nav>
 
 <!-- ===== OVERVIEW ===== -->
@@ -163,25 +156,13 @@
   </div>
 
   <div class="card" style="margin-bottom:14px;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-      <div class="upload-zone" onclick="document.getElementById('imgInput').click()" style="margin-bottom:0;">
-        <div style="font-size:24px;margin-bottom:6px;">📸</div>
-        <div style="font-weight:600;">สแกนใบเสร็จด้วย AI</div>
-        <div style="font-size:11px;margin-top:4px;">รูป PNG, JPG จากมือถือได้เลย</div>
-        <input type="file" id="imgInput" style="display:none" accept="image/*" multiple onchange="handleReceiptImages(event)">
-      </div>
-      <div class="upload-zone" onclick="document.getElementById('csvInput').click()" style="margin-bottom:0;">
-        <div style="font-size:24px;margin-bottom:6px;">📊</div>
-        <div style="font-weight:600;">นำเข้า Bank Statement</div>
-        <div style="font-size:11px;margin-top:4px;">ไฟล์ .csv จากธนาคาร</div>
-        <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="handleCSV(event)">
-      </div>
+    <div class="upload-zone" onclick="document.getElementById('csvInput').click()">
+      <div style="font-size:24px;margin-bottom:6px;">📊</div>
+      <div style="font-weight:600;">นำเข้า Bank Statement</div>
+      <div style="font-size:11px;margin-top:4px;">ไฟล์ .csv จากธนาคาร (วันที่, รายการ, จำนวน)</div>
+      <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="handleCSV(event)">
     </div>
     <div id="import-msg" style="font-size:12px;color:var(--muted);"></div>
-    <div id="scan-area" style="display:none;">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;" id="scan-status">AI กำลังอ่านใบเสร็จ...</div>
-      <div id="scan-results"></div>
-    </div>
   </div>
 
   <div class="card">
@@ -312,22 +293,6 @@
   </div>
 </div>
 
-<!-- ===== MODAL: SETTINGS ===== -->
-<div class="modal-bg" id="modal-settings">
-  <div class="modal">
-    <h3>⚙️ ตั้งค่า</h3>
-    <div class="api-notice">API key จะเก็บไว้ใน localStorage บนเครื่องของคุณเท่านั้น ไม่มีการส่งไปที่ใดนอกจาก api.anthropic.com</div>
-    <div class="form-group" style="margin-bottom:10px;">
-      <label>Anthropic API Key (สำหรับสแกนใบเสร็จด้วย AI)</label>
-      <input type="password" id="settings-apikey" placeholder="sk-ant-...">
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">สมัครได้ที่ console.anthropic.com — ใช้สำหรับฟีเจอร์สแกนใบเสร็จเท่านั้น</div>
-    <div class="modal-footer">
-      <button class="btn btn-primary" onclick="saveSettings()">บันทึก</button>
-      <button class="btn" onclick="closeModal('modal-settings')">ยกเลิก</button>
-    </div>
-  </div>
-</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -355,7 +320,6 @@ function load() {
     ['th','us','crypto'].forEach(m => { if (!state.stocks[m]) state.stocks[m] = []; });
   }
 }
-function getApiKey() { return localStorage.getItem('anthropicApiKey') || ''; }
 
 // ===== NAV =====
 function showPage(name, btn) {
@@ -371,17 +335,6 @@ function showPage(name, btn) {
 
 // ===== MODALS =====
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-function openSettings() {
-  document.getElementById('settings-apikey').value = getApiKey();
-  document.getElementById('modal-settings').classList.add('open');
-}
-function saveSettings() {
-  const key = document.getElementById('settings-apikey').value.trim();
-  if (key) localStorage.setItem('anthropicApiKey', key);
-  else localStorage.removeItem('anthropicApiKey');
-  closeModal('modal-settings');
-}
 
 // ===== TRANSACTIONS =====
 let editTxId = null;
@@ -716,113 +669,6 @@ function renderOverview() {
         <td style="text-align:right;font-weight:600;" class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}฿${t.amount.toLocaleString()}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="color:var(--muted);padding:16px 0;">ยังไม่มีรายการ</td></tr>';
-}
-
-// ===== AI RECEIPT SCANNER =====
-async function handleReceiptImages(e) {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    alert('กรุณาตั้งค่า Anthropic API Key ก่อน (กดปุ่ม ⚙️ มุมขวาบน)');
-    e.target.value = '';
-    return;
-  }
-
-  const scanArea = document.getElementById('scan-area');
-  const scanResults = document.getElementById('scan-results');
-  const scanStatus = document.getElementById('scan-status');
-  const importMsg = document.getElementById('import-msg');
-  scanArea.style.display = 'block';
-  scanResults.innerHTML = '';
-  importMsg.textContent = '';
-
-  let successCount = 0;
-  for (const file of files) {
-    scanStatus.textContent = `⏳ กำลังอ่าน ${file.name} (${files.indexOf(file)+1}/${files.length})...`;
-    const resultDiv = document.createElement('div');
-    resultDiv.style.cssText = 'background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px;';
-    resultDiv.innerHTML = `<div style="color:var(--muted);font-size:12px;">⏳ ${file.name}</div>`;
-    scanResults.appendChild(resultDiv);
-
-    try {
-      const base64 = await fileToBase64(file);
-      const mediaType = file.type || 'image/jpeg';
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'x-anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-              { type: 'text', text: `อ่านใบเสร็จ/สลิปโอนเงินในรูปนี้ ตอบเป็น JSON เท่านั้น ไม่ต้องมีคำอธิบาย:
-{"date":"YYYY-MM-DD","description":"รายละเอียด","amount":ตัวเลข,"type":"income หรือ expense","category":"หมวดหมู่"}
-หมวดหมู่: อาหาร, เดินทาง, บิล/ค่าใช้จ่ายคงที่, ช้อปปิ้ง, สุขภาพ, บันเทิง, อื่นๆ, เงินเดือน, Freelance, ลงทุน
-สลิปรับเงิน → income, จ่ายเงิน → expense
-วันที่เป็น YYYY-MM-DD เสมอ เช่น 26 เม.ย. 69 = 2026-04-26` }
-            ]
-          }]
-        })
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const text = data.content?.[0]?.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      const tx = {
-        id: Date.now() + Math.random(),
-        type: parsed.type || 'expense',
-        cat: parsed.category || 'อื่นๆ',
-        desc: parsed.description || file.name,
-        amount: Math.abs(parsed.amount || 0),
-        date: parsed.date || new Date().toISOString().split('T')[0]
-      };
-      state.transactions.unshift(tx);
-      successCount++;
-      const color = tx.type === 'income' ? 'var(--green)' : 'var(--red)';
-      const sign = tx.type === 'income' ? '+' : '-';
-      resultDiv.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-weight:600;font-size:13px;">✓ ${tx.desc}</div>
-            <div style="font-size:11px;color:var(--muted);">${tx.cat} • ${tx.date}</div>
-          </div>
-          <div style="font-weight:700;color:${color};">${sign}฿${tx.amount.toLocaleString()}</div>
-        </div>`;
-    } catch(err) {
-      resultDiv.innerHTML = `<div style="color:var(--red);font-size:12px;">❌ ${file.name}: ${err.message}</div>`;
-    }
-  }
-
-  scanStatus.textContent = successCount > 0 ? `✓ สำเร็จ ${successCount} รายการ` : 'เสร็จสิ้น';
-  if (successCount > 0) {
-    save(); renderTxTable(); renderOverview();
-    importMsg.textContent = `✓ นำเข้าใบเสร็จสำเร็จ ${successCount} รายการ`;
-  }
-  e.target.value = '';
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 // ===== INIT =====
